@@ -14,7 +14,7 @@
 #include <gmapping/sensor/sensor_range/rangereading.h>
 #include <gmapping/scanmatcher/scanmatcher.h>
 #include "motionmodel.h"
-
+#include <boost/thread/thread.hpp>
 
 namespace GMapping {
 
@@ -312,6 +312,7 @@ namespace GMapping {
     
     /**scanmatches all the particles*/
     inline void scanMatch(const double *plainReading);
+    inline void runScanMatch(const double* plainReading, double &score, Particle &particle);
     /**normalizes the particle weights*/
     inline void normalize();
     

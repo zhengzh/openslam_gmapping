@@ -4,16 +4,11 @@
 #define isnan(x) (x==FP_NAN)
 #endif
 
-/**Just scan match every single particle.
-If the scan matching fails, the particle gets a default likelihood.*/
-inline void GridSlamProcessor::scanMatch(const double* plainReading){
-  // sample a new pose from each scan in the reference
-  
-  double sumScore=0;
-  for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
-    OrientedPoint corrected;
-    double score, l, s;
-    score=m_matcher.optimize(corrected, it->map, it->pose, plainReading);
+inline void GridSlamProcessor::runScanMatch(const double* plainReading, double &score, Particle &particle){
+  OrientedPoint corrected;
+  double l, s;
+  Particle *it = &particle;
+  score=m_matcher.optimize(corrected, it->map, it->pose, plainReading);
     //    it->pose=corrected;
     if (score>m_minimumScore){
       it->pose=corrected;
@@ -26,10 +21,38 @@ inline void GridSlamProcessor::scanMatch(const double* plainReading){
     }
 
     m_matcher.likelihoodAndScore(s, l, it->map, it->pose, plainReading);
-    sumScore+=score;
     it->weight+=l;
     it->weightSum+=l;
 
+}
+
+/**Just scan match every single particle.
+If the scan matching fails, the particle gets a default likelihood.*/
+inline void GridSlamProcessor::scanMatch(const double* plainReading){
+  // sample a new pose from each scan in the reference
+  
+  double sumScore=0;
+  boost::thread *threads[m_particles.size()];
+  double score[m_particles.size()];
+
+  for(unsigned int i=0; i<m_particles.size(); i++) {
+    score[i] = 0;
+  }
+
+  for(unsigned int i=0; i<m_particles.size(); i++) {
+    threads[i] = new boost::thread(&GridSlamProcessor::runScanMatch, this, plainReading, boost::ref(score[i]), boost::ref(m_particles[i]));
+  }
+
+  for(unsigned int i=0; i<m_particles.size(); i++) {
+    threads[i]->join();
+  }
+
+  for(unsigned int i=0; i<m_particles.size(); i++) {
+    // m_infoStream << "score of particle " << i <<"  :" << score[i] << std::endl;
+    sumScore += score[i];
+  }
+
+  for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
     //set up the selective copy of the active area
     //by detaching the areas that will be updated
     m_matcher.invalidateActiveArea();
@@ -38,6 +61,42 @@ inline void GridSlamProcessor::scanMatch(const double* plainReading){
   if (m_infoStream)
     m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;	
 }
+
+// /**Just scan match every single particle.
+// If the scan matching fails, the particle gets a default likelihood.*/
+// inline void GridSlamProcessor::scanMatch(const double* plainReading){
+//   // sample a new pose from each scan in the reference
+  
+//   boost::thread p(boost::bind(&Particle::run_process_scan, this));
+//   double sumScore=0;
+//   for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
+//     OrientedPoint corrected;
+//     double score, l, s;
+//     score=m_matcher.optimize(corrected, it->map, it->pose, plainReading);
+//     //    it->pose=corrected;
+//     if (score>m_minimumScore){
+//       it->pose=corrected;
+//     } else {
+// 	if (m_infoStream){
+// 	  m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
+// 	  m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
+// 	  m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
+// 	}
+//     }
+
+//     m_matcher.likelihoodAndScore(s, l, it->map, it->pose, plainReading);
+//     sumScore+=score;
+//     it->weight+=l;
+//     it->weightSum+=l;
+
+//     //set up the selective copy of the active area
+//     //by detaching the areas that will be updated
+//     m_matcher.invalidateActiveArea();
+//     m_matcher.computeActiveArea(it->map, it->pose, plainReading);
+//   }
+//   if (m_infoStream)
+//     m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;	
+// }
 
 inline void GridSlamProcessor::normalize(){
   //normalize the log m_weights

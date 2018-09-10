@@ -3,6 +3,7 @@ project(openslam_gmapping)
 
 find_package(catkin)
 
+set(CMAKE_BUILD_TYPE "Release")
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES gridfastslam scanmatcher sensor_base sensor_range sensor_odometry utils
